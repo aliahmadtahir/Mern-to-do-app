@@ -1,0 +1,205 @@
+name: MERN Todo App CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_REGISTRY: docker.io
+  BACKEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/todo-backend
+  FRONTEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/todo-frontend
+  MONGODB_IMAGE: mongo:latest
+
+jobs:
+  # Job 1: Build and Test Backend
+  backend-build-test:
+    name: Build & Test Backend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: TODO/todo_backend/package-lock.json
+      
+      - name: Install backend dependencies
+        working-directory: ./TODO/todo_backend
+        run: npm ci
+      
+      - name: Run backend tests
+        working-directory: ./TODO/todo_backend
+        run: npm test -- --passWithNoTests
+      
+      - name: Build backend
+        working-directory: ./TODO/todo_backend
+        run: echo "Backend build successful"
+
+  # Job 2: Build and Test Frontend
+  frontend-build-test:
+    name: Build & Test Frontend
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: TODO/todo_frontend/package-lock.json
+      
+      - name: Install frontend dependencies
+        working-directory: ./TODO/todo_frontend
+        run: npm ci
+      
+      - name: Run frontend tests
+        working-directory: ./TODO/todo_frontend
+        run: CI=true npm test -- --passWithNoTests
+      
+      - name: Build frontend
+        working-directory: ./TODO/todo_frontend
+        run: npm run build
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: TODO/todo_frontend/build
+
+  # Job 3: Build and Push Docker Images
+  docker-build-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [backend-build-test, frontend-build-test]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Extract metadata for Backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./TODO/todo_backend
+          file: ./TODO/todo_backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.BACKEND_IMAGE }}:buildcache,mode=max
+      
+      - name: Extract metadata for Frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./TODO/todo_frontend
+          file: ./TODO/todo_frontend/Dockerfile
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.FRONTEND_IMAGE }}:buildcache,mode=max
+
+  # Job 4: Deploy to Kubernetes
+  deploy-kubernetes:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+      
+      - name: Update image tags in deployment
+        working-directory: ./TODO/k8s
+        run: |
+          sed -i "s|BACKEND_IMAGE_TAG|${{ env.BACKEND_IMAGE }}:${{ github.sha }}|g" backend-deployment.yaml
+          sed -i "s|FRONTEND_IMAGE_TAG|${{ env.FRONTEND_IMAGE }}:${{ github.sha }}|g" frontend-deployment.yaml
+      
+      - name: Deploy to Kubernetes
+        working-directory: ./TODO/k8s
+        run: |
+          kubectl apply -f mongodb-deployment.yaml
+          kubectl apply -f backend-deployment.yaml
+          kubectl apply -f frontend-deployment.yaml
+          kubectl apply -f ingress.yaml
+      
+      - name: Wait for deployments
+        run: |
+          kubectl rollout status deployment/todo-backend -n default --timeout=5m
+          kubectl rollout status deployment/todo-frontend -n default --timeout=5m
+      
+      - name: Verify deployment
+        run: |
+          kubectl get pods -n default
+          kubectl get services -n default
+
+  # Job 5: Integration Tests (Post-deployment)
+  integration-tests:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+    needs: deploy-kubernetes
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run health checks
+        run: |
+          echo "Running health checks..."
+          # Add your integration test commands here
+          # Example: curl http://your-app-url/health
+      
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests..."
+          # Add smoke test commands here
