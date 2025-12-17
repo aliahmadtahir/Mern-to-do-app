@@ -4,12 +4,12 @@ import './App.css';
 import axios from 'axios';
 import { BsCircleFill, BsFillCheckCircleFill, BsFillTrashFill, BsPencil } from 'react-icons/bs';
 
+const API_BASE = process.env.REACT_APP_API_URL || '/api';
+
 const Home = () => {
     const [todos, setTodos] = useState([]);
     const [updatetask, setUpdatetask] = useState('');
     const [taskid, setTaskid] = useState('');
-
-    const API_BASE = process.env.REACT_APP_API_URL || '/api';
 
     useEffect(() => {
         axios.get(`${API_BASE}/get`)
