@@ -63,7 +63,7 @@ jobs:
       
       - name: Run frontend tests
         working-directory: ./TODO/todo_frontend
-        run: CI=true npm test -- --passWithNoTests
+        run: CI=true npm test -- --watchAll=false
       
       - name: Build frontend
         working-directory: ./TODO/todo_frontend
