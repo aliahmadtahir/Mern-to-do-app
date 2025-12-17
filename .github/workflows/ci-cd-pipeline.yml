@@ -8,8 +8,8 @@ on:
 
 env:
   DOCKER_REGISTRY: docker.io
-  BACKEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/todo-backend
-  FRONTEND_IMAGE: ${{ secrets.DOCKER_USERNAME }}/todo-frontend
+  BACKEND_IMAGE: aliahmadtahir/todo-backend
+  FRONTEND_IMAGE: aliahmadtahir/todo-frontend
   MONGODB_IMAGE: mongo:latest
 
 jobs:
