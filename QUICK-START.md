@@ -11,9 +11,9 @@ Edit [.github/workflows/ci-cd-pipeline.yml](.github/workflows/ci-cd-pipeline.yml
 
 ```yaml
 env:
-  DOCKER_REGISTRY: docker.io
-  BACKEND_IMAGE: aliahmadtahir/todo-backend     # ✅ Change this!
-  FRONTEND_IMAGE: aliahmadtahir/todo-frontend   # ✅ Change this!
+   DOCKER_REGISTRY: docker.io
+   BACKEND_IMAGE: aliaja/todo-backend     # ✅ Your username
+   FRONTEND_IMAGE: aliaja/todo-frontend   # ✅ Your username
 ```
 
 Push this change:
@@ -28,8 +28,8 @@ git push origin main
 2. Login or create account
 3. Click "Create Repository"
 4. Create TWO repositories:
-   - `aliahmadtahir/todo-backend`
-   - `aliahmadtahir/todo-frontend`
+   - `aliaja/todo-backend`
+   - `aliaja/todo-frontend`
 5. Make them **Public**
 
 ### Step 3: Get Docker Hub Access Token
@@ -46,7 +46,7 @@ git push origin main
 
 **Secret 1:**
 - Name: `DOCKER_USERNAME`
-- Value: `aliahmadtahir` (your Docker Hub username)
+- Value: `aliaja` (your Docker Hub username)
 
 **Secret 2:**
 - Name: `DOCKER_PASSWORD`  
