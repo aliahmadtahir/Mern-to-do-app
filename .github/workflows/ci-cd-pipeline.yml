@@ -119,7 +119,7 @@ jobs:
     name: Deploy to Kubernetes
     runs-on: ubuntu-latest
     needs: docker-build-push
-    if: github.ref == 'refs/heads/main' && env.KUBE_CONFIG != ''
+    if: github.ref == 'refs/heads/main' && secrets.KUBE_CONFIG != ''
     env:
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
     
