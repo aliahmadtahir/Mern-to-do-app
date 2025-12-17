@@ -126,29 +126,36 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Ensure KUBE_CONFIG is present
+      
+      - name: Check kubeconfig presence
+        id: check-kubeconfig
         run: |
-          if [ -z "$KUBE_CONFIG" ]; then
-            echo "KUBE_CONFIG is missing. Skipping deployment." && exit 1
+          if [ -n "$KUBE_CONFIG" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "KUBE_CONFIG not set; skipping deploy steps."
           fi
       
       - name: Setup kubectl
         uses: azure/setup-kubectl@v3
         with:
           version: 'latest'
+        if: steps.check-kubeconfig.outputs.present == 'true'
       
       - name: Configure kubectl
         run: |
           mkdir -p $HOME/.kube
           echo "$KUBE_CONFIG" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
+        if: steps.check-kubeconfig.outputs.present == 'true'
       
       - name: Update image tags in deployment
         working-directory: ./TODO/k8s
         run: |
           sed -i "s|BACKEND_IMAGE_TAG|${{ env.BACKEND_IMAGE }}:${{ github.sha }}|g" backend-deployment.yaml
           sed -i "s|FRONTEND_IMAGE_TAG|${{ env.FRONTEND_IMAGE }}:${{ github.sha }}|g" frontend-deployment.yaml
+        if: steps.check-kubeconfig.outputs.present == 'true'
       
       - name: Deploy to Kubernetes
         working-directory: ./TODO/k8s
@@ -157,16 +164,19 @@ jobs:
           kubectl apply -f backend-deployment.yaml
           kubectl apply -f frontend-deployment.yaml
           kubectl apply -f ingress.yaml
+        if: steps.check-kubeconfig.outputs.present == 'true'
       
       - name: Wait for deployments
         run: |
           kubectl rollout status deployment/todo-backend -n default --timeout=5m
           kubectl rollout status deployment/todo-frontend -n default --timeout=5m
+        if: steps.check-kubeconfig.outputs.present == 'true'
       
       - name: Verify deployment
         run: |
           kubectl get pods -n default
           kubectl get services -n default
+        if: steps.check-kubeconfig.outputs.present == 'true'
 
   # Job 5: Integration Tests (Post-deployment)
   integration-tests:
